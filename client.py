@@ -5,42 +5,26 @@ from db import DataBase
 db = DataBase()
 
 
-
-
-
-
 class Client:
     name_id: str
+    uuid: str
     db = db
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, uuid: str):
 
         self.name_id = name
+        self.uuid = uuid
 
-        self.db.insert(self.name_id)
+        # on ajoute le client a la db pour lenregistrer si il nest pas deja dedans et on ajoute les coins de depart
+        self.db.insert(self.name_id, 1000)
 
         self.coins = self.get_total_coins()
 
-        self.__reponse = None
+        self.__reponse = "None"
 
         self.have_bet = False
 
-        self.is_adding_coin = False
-        self.thread_adding_coins = AddingCoinsService(self.name_id)
-        self.thread_adding_coins.start()
-        self.thread_adding_coins.pause()
 
-
-    def start_adding_coins(self, coin_to_add: int):
-        self.thread_adding_coins.resume(coin_to_add)
-        self.is_adding_coin = True
-        # print("[CLIENT INFO]", "starting to adding coin for", self.name_id)
-
-
-    def stop_adding_coin(self):
-        self.thread_adding_coins.pause()
-        self.is_adding_coin = False
-        # print("[CLIENT INFO]", "stopping to adding coin for", self.name_id)
 
 
     def add_coin(self, coin_to_add: int):
@@ -49,6 +33,10 @@ class Client:
 
     def remove_coin(self, coin_to_rm: int):
         self.db.remove_coin(self.name_id, coin_to_rm)
+
+
+    def set_coin(self, coin_to_rm: int):
+        self.db.set_coin(self.name_id, coin_to_rm)
 
 
     def get_total_coins(self):
