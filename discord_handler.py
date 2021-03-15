@@ -5,13 +5,14 @@ from bet import Bet, ClientBet
 import datetime
 import time
 import discord
+import asyncio
 from db import DataBase
 from tuto import _tuto_
 from classement import Classement
 from threading import Thread
 # ========================================== FIN DES IMPORTS ========================================================= #
 
-__version__ = "alpha 0.1"
+__version__ = "alpha 0.3"
 
 _COMMANDES_ = {'cmd': [{
                 'start': "start_bet",
@@ -86,7 +87,9 @@ _COMMANDES_ = {'cmd': [{
 class DiscordHandler(discord.Client):
     _DB = DataBase()
 
-    _COIN_TO_ADD = 50
+    _COIN_TO_ADD = 10
+    _TIME_BEFORE_ADDING_COIN = 1800  # 30 minutes
+
 
     client_handler = None
     bet_handler = None
@@ -100,7 +103,7 @@ class DiscordHandler(discord.Client):
 
 
     async def on_ready(self):
-        self._DB .create()
+        self._DB.create()
 
         self.client_handler = ClientHandler()
         self.bet_handler = BetHandler()
@@ -108,6 +111,7 @@ class DiscordHandler(discord.Client):
 
         print("[DISCORD INFO]", "Listing des users ...")
         await self.change_presence(activity=discord.Game(name="Listé les users"))
+
         for guild in self.guilds:
             for member in guild.members:
                 #        Client(name       , uuid)
@@ -121,6 +125,12 @@ class DiscordHandler(discord.Client):
         await self.change_presence(activity=discord.Game(name="version : " + str(__version__)))
         # await self.change_presence(activity=discord.Game(name="recevoir vos bets"))
         # ===
+
+
+    async def on_member_join(self, member):
+        #        Client(name       , uuid)
+        client = Client(str(member), str(member.id))
+        self.client_handler.add_user(client)
 
 
 
@@ -165,9 +175,10 @@ class DiscordHandler(discord.Client):
                             user_coins_total = client.get_total_coins()
 
                             output_msg = "```"
-                            output_msg += "Tu as voté " + str(reaction) + "(" + rep + ") au bet '" + bet.get_utterance() + "'\n"
+                            output_msg += "Tu as voté " + str(rep) + " au bet '" + str(bet.get_utterance()) + "'\n"
                             output_msg += "Tu as " + str(user_coins_total) + " coins\n\n"
-                            output_msg += "Nombre de coin a parier :"
+                            output_msg += "Nombre de coin a parier :\n"
+                            output_msg += "Exemple : '!bet 50' ou '!bet 50 name#0000' pour parrier sur le bet de quelquun en particulier"
                             output_msg += "```"
                             client.have_bet = True
 
@@ -176,6 +187,77 @@ class DiscordHandler(discord.Client):
                     else:
                         output_msg = "``` le bet ne peut plus recevoir de parri ```"
                         await user.send(output_msg)
+
+
+
+    async def on_voice_state_update(self, member, before, after):
+
+        if before.channel is None and after.channel is not None:
+            """ Nouvelle connexion à un channel """
+            '''
+                si before channel est None et after channel nest pas None c une nouvelle connexion
+            '''
+            print("[DISCORD INFO]", str(member), "connecter a un channel")
+
+            if before.self_deaf is not True:
+
+                client = self.client_handler.get_client_from_name(str(member))
+
+                if client is not None:
+                    client.is_connected_in_vocal = True
+                    self.loop.create_task(self.client_service_add_coins(client))
+
+
+
+        elif before.self_deaf is True and before.channel is None and after.channel is not None:
+            """ Nouvelle connexion à un channel en etant mute casque """
+            print("[DISCORD INFO]", str(member), "connecté en etant mute a un channel")
+
+            client = self.client_handler.get_client_from_name(str(member))
+
+            if client is not None:
+                client.is_deaf_in_vocal = True
+                client.is_connected_in_vocal = True
+                self.loop.create_task(self.client_service_add_coins(client))
+
+
+
+        if before.self_deaf is False and after.self_deaf is True:
+            """ client cest mute casque """
+            print("[DISCORD INFO]", str(member), "mute dun channel")
+
+            client = self.client_handler.get_client_from_name(str(member))
+
+            if client is not None:
+                client.is_deaf_in_vocal = True
+
+
+
+        if before.self_deaf is True and after.self_deaf is False:
+            """ client cest demute casque """
+            print("[DISCORD INFO]", str(member), "demute dun channel")
+
+            client = self.client_handler.get_client_from_name(str(member))
+
+            if client is not None:
+                client.is_deaf_in_vocal = False
+
+
+
+        if before.channel is not None and after.channel is None:
+            """ deconnexion d'un channel """
+            '''
+                si before channel nest pas None et after channel est None c une deconnexion de channel
+
+                On arrete dadd les coin
+            '''
+            print("[DISCORD INFO]", str(member), "deconnecter dun channel")
+
+            client = self.client_handler.get_client_from_name(str(member))
+
+            if client is not None:
+                client.is_connected_in_vocal = False
+                client.is_deaf_in_vocal = False
 
 
 
@@ -363,6 +445,45 @@ class DiscordHandler(discord.Client):
     # ============================ FONCTIONS DES COMMANDES =============================== #
 
 
+    async def client_bet_update_quote(self, bet, msg_output_bet, bet_utterance, bet_time, rep1, rep2, owner):
+        c = 0
+        while True:
+            if bet.get_utterance() is not None:
+                # do something
+                embed_mess = discord.Embed(title=bet_utterance, description="Bet du " + bet_time)
+                embed_mess.add_field(name="owner", value=owner, inline=False)
+                embed_mess.add_field(name=rep1['name'], value=rep1['emoticon'] + "\n" + str(bet.get_cote()[0]))
+                embed_mess.add_field(name=rep2['name'], value=rep2['emoticon'] + "\n" + str(bet.get_cote()[1]))
+
+                await msg_output_bet.edit(embed=embed_mess)
+                await asyncio.sleep(2)
+                c += 1
+
+            else:
+                break
+
+
+
+    async def client_service_add_coins(self, client):
+        while True:
+
+            if client.is_deaf_in_vocal:
+                print("[SERVICE ADDING COINS]", "waiting for", client.name_id, "to demute headset")
+                await asyncio.sleep(2)
+                pass
+
+            elif client.is_connected_in_vocal:
+                # do something
+                await asyncio.sleep(self._TIME_BEFORE_ADDING_COIN)
+                print("[SERVICE ADDING COINS]", "adding", self._COIN_TO_ADD, "coins to", client.name_id)
+                client.add_coin(self._COIN_TO_ADD)
+
+            else:
+                print("[SERVICE ADDING COINS]", "stop service for", client.name_id, "- (cause : déconnexion)")
+                break
+
+
+
     async def cmd_get_version(self, channel):
         """ affiche la version actuelle """
         await channel.send("```Version : " + str(__version__) + "```")
@@ -416,54 +537,75 @@ class DiscordHandler(discord.Client):
             # check si luser a repondu ou non avec les reactions
             if client_reponse != "None":
 
-                if len(splitted_user_input) == 1:   # bet sur le dernier bet enregistrer
+                if "all in" in user_input:
+                    coin_to_bet = client.get_total_coins()
+                    bet = all_bet[-1:][0]  # le dernier bet enregistrer
+
+                    client.remove_coin(coin_to_bet)
+                    bet.do_bet(ClientBet(str(client.name_id), str(client_reponse), str(coin_to_bet)))
+
+                    await channel.send("```" + str(client.name_id) + " tu as voté " + str(coin_to_bet) + " coins sur '" + str(client_reponse) + "' de '" + str(bet.get_utterance()) + "'```")
 
 
-                    coin_to_bet = user_input
+                elif len(splitted_user_input) == 1:   # bet sur le dernier bet enregistrer
 
-                    # check si luser a asser de coins
-                    if int(client.get_total_coins()) == 0:
-                        await channel.send("```" + client.name_id + " tu nas plus de coins ```")
+                    find_nb_coins_bet = [int(s) for s in user_input.split() if s.isdigit()]
 
-                    elif int(coin_to_bet) == 0:
-                        await channel.send("```" + client.name_id + " tu ne peut pas voté 0 coins ```")
+                    if len(find_nb_coins_bet) > 0:
+                        coin_to_bet = find_nb_coins_bet[0]
 
-                    elif int(coin_to_bet) > int(client.get_total_coins()):
-                        await channel.send("```" + client.name_id + " tu nas pas assez coins ```")
+                        # check si luser a asser de coins
+                        if int(client.get_total_coins()) == 0:
+                            await channel.send("```" + client.name_id + " tu nas plus de coins ```")
+
+                        elif int(coin_to_bet) == 0:
+                            await channel.send("```" + client.name_id + " tu ne peut pas voté 0 coins ```")
+
+                        elif int(coin_to_bet) > int(client.get_total_coins()):
+                            await channel.send("```" + client.name_id + " tu nas pas assez coins ```")
+
+                        else:
+                            bet = all_bet[-1:][0]  # le dernier bet enregistrer
+
+                            client.remove_coin(coin_to_bet)
+                            bet.do_bet(ClientBet(str(client.name_id), str(client_reponse), str(coin_to_bet)))
+
+                            await channel.send("```" + str(client.name_id) + " tu as voté " + str(coin_to_bet) + " coins sur '" + str(client_reponse) + "' de '" + str(bet.get_utterance()) + "'```")
 
                     else:
-                        bet = all_bet[-1:][0]   # le dernier bet enregistrer
+                        await channel.send("```nombre de coin a bet non trouvé```")
 
-                        client.remove_coin(coin_to_bet)
-                        bet.do_bet(ClientBet(str(client.name_id), str(client_reponse), str(coin_to_bet)))
-
-                        await channel.send("```" + client.name_id + " tu as voté " + coin_to_bet + " coins pour '" + bet.get_utterance() + "'```")
 
 
                 elif len(splitted_user_input) == 2:  # bet sur le bet du owner defini
 
-                    coin_to_bet = splitted_user_input[0]
-                    user_to_add_coin_on_bet = splitted_user_input[1]
+                    user_to_add_coin_on_his_bet = splitted_user_input[1]
 
-                    # check si luser a asser de coins
-                    if int(client.get_total_coins()) == 0:
-                        await channel.send("```" + client.name_id + " tu nas plus de coins ```")
+                    find_nb_coins_bet = [int(s) for s in user_input.split() if s.isdigit()]
 
-                    elif int(coin_to_bet) > int(client.get_total_coins()):
-                        await channel.send("```" + client.name_id + " tu nas pas assez coins ```")
+                    if len(find_nb_coins_bet) > 0:
+                        coin_to_bet = find_nb_coins_bet[0]
+
+                        # check si luser a asser de coins
+                        if int(client.get_total_coins()) == 0:
+                            await channel.send("```" + client.name_id + " tu nas plus de coins ```")
+
+                        elif int(coin_to_bet) > int(client.get_total_coins()):
+                            await channel.send("```" + client.name_id + " tu nas pas assez coins ```")
+
+                        else:
+                            bet = self.bet_handler.get_bet_from_owner(user_to_add_coin_on_his_bet)
+
+                            client.remove_coin(coin_to_bet)
+                            bet.do_bet(ClientBet(str(client.name_id), str(client_reponse), str(coin_to_bet)))
+
+                            await channel.send("```" + str(client.name_id) + " tu as voté " + str(coin_to_bet) + " coins sur '" + str(client_reponse) + "' de '" + str(bet.get_utterance()) + "'```")
 
                     else:
-                        bet = self.bet_handler.get_bet_from_owner(user_to_add_coin_on_bet)
-
-                        client.remove_coin(coin_to_bet)
-                        bet.do_bet(ClientBet(str(client.name_id), str(client_reponse), str(coin_to_bet)))
-
-                        await channel.send("```" + client.name_id + " tu as voté " + coin_to_bet + " coins pour " + bet.get_utterance() + "```")
-
+                        await channel.send("```nombre de coin a bet non trouvé```")
 
             else:
                 await channel.send("```il faut repondre a un bet avec une reaction pour bet tes coins trou du cuuuuuuuullllzzzz```")
-
 
         else:
             await channel.send("```Aucun bet n'est lancé```")
@@ -490,36 +632,67 @@ class DiscordHandler(discord.Client):
                     bet.set_correct_reponse(str(correct_reponse))
 
                 else:
-                    await channel.send("```la reponse donné ne correspond à aucune du bet```")
+                    await channel.send("```la reponse donné ne correspond à aucunes du bet```")
                     return
 
 
-                winners = bet.calcul_payout()
+                # calcul les gains
+                payout_list = bet.calcul_payout()
+
+                winners = bet.get_winners()
+                loosers = bet.get_loosers()
 
 
-                if len(winners) != 0:
+                output += "La bonne réponse au bet '" + str(bet.get_utterance()) + "' était '" + str(bet.get_correct_reponse()) + "'\n"
 
-                    for winner in winners:
-                        client_win = winner[0]
-                        payout = winner[1]
 
-                        client = self.client_handler.get_client_from_name(str(client_win))
-                        client.add_coin(int(payout))
 
-                        output += str(client_win) + " à gagné " + str(payout) + " coins\n"
+                if len(winners) == 0 and len(loosers) == 0:
+                    output += "\n"
+                    output += "\tPersonne n'a voté"
 
                 else:
-                    output += "aucun gagnant les dogitoooss"
 
+                    if len(winners) != 0:
+                        output += "\n"
+
+                        for payout_winner in payout_list:
+                            client_win = payout_winner[0]
+                            payout = payout_winner[1]
+
+                            client = self.client_handler.get_client_from_name(str(client_win))
+                            client.add_coin(int(payout))
+                            output += "\t" + str(client_win) + " à voté '" + str(bet.get_correct_reponse()) + "' et a gagné " + str(payout) + " coins\n"
+
+
+                    if len(loosers) != 0:
+                        output += "\n"
+
+                        for looser in loosers:
+                            client_name = looser[0]
+                            client_reponse = looser[1]
+                            client_coins_voted = looser[2]
+
+                            output += "\t" + str(client_name) + " à voté '" + str(client_reponse) + "' et a perdu " + str(client_coins_voted) + " coins\n"
+
+
+
+
+                for player in bet.player_names_of_the_bet():
+                    client = self.client_handler.get_client_from_name(str(player))
+                    client.reset_bet()
+
+
+                uuid = str(bet.get_uuid())
                 bet.stop()
-                self.bet_handler.remove_bet(str(bet.get_uuid()))
+                self.bet_handler.remove_bet(uuid)
 
             else:
                 output += "!stop_bet a besoin de la reponse juste pour cloturer le bet"
 
             output += "```"
 
-            await channel.send(output)
+            await channel.send(str(output))
 
 
 
@@ -572,13 +745,16 @@ class DiscordHandler(discord.Client):
                                  value=rep2['emoticon'])
 
 
-            output_bet = await channel.send(embed=embed_mess)
+            msg_output_bet = await channel.send(embed=embed_mess)
 
-            _bet_uuid = output_bet.id
+            _bet_uuid = msg_output_bet.id
             bet.set_uuid(_bet_uuid)
 
-            await output_bet.add_reaction(rep1['emoticon'])
-            await output_bet.add_reaction(rep2['emoticon'])
+            # testing
+            self.loop.create_task(self.client_bet_update_quote(bet, msg_output_bet, bet_utterance, bet_time, rep1, rep2, owner))
+
+            await msg_output_bet.add_reaction(rep1['emoticon'])
+            await msg_output_bet.add_reaction(rep2['emoticon'])
 
         else:
             await channel.send("```" + str(owner) + " tu as déjà un bet en cour```")
@@ -633,13 +809,13 @@ class DiscordHandler(discord.Client):
 
                 owner = str(bet.get_owner())
                 date = str(bet.get_bet_date())
-                uuid = str(bet.get_uuid())
+                # uuid = str(bet.get_uuid())
 
-                output += "\tBet#" + id + " : " + str(ut) + "\n"
+                output += "\tBet#" + str(id) + " : " + str(ut) + "\n"
                 output += "\t\towner : " + owner + "\n"
                 output += "\t\treponses : " + str(rep_1['name']) + ", " + str(rep_2['name']) + "\n"
-                output += "\t\tdate : " + date + "\n"
-                output += "\t\tuuid : " + uuid + "\n"
+                output += "\t\tdate : " + str(date) + "\n"
+                # output += "\t\tuuid : " + uuid + "\n"
 
 
         else:

@@ -30,6 +30,12 @@ class Bet:
 
     _OWNER = "None"
 
+    _WINNERS = []
+    _LOOSERS = []
+
+    _COTE_R_1 = {'rep': "1️⃣", 'count': 0, 'total': 0}
+    _COTE_R_2 = {'rep': "2️⃣", 'count': 0, 'total': 0}
+
 
 
     def __init__(self, user_input: str):
@@ -41,8 +47,8 @@ class Bet:
         self._NAME_REPONSES = self._find_bet_reponses()  # return oui, non
         self._BET_UTTERANCE = self._find_bet_phrase()
 
-        self._REPONSE_1 = {"name": self._NAME_REPONSES[0], "emoticon": "👍"}
-        self._REPONSE_2 = {"name": self._NAME_REPONSES[1], "emoticon": "👎"}
+        self._REPONSE_1 = {"name": self._NAME_REPONSES[0], "emoticon": "1️⃣"}  # 1️⃣   👍
+        self._REPONSE_2 = {"name": self._NAME_REPONSES[1], "emoticon": "2️⃣"}  # 2️⃣   👎
 
         print("[BET START] name :", self._BET_UTTERANCE, "| reponses :", self._REPONSE_1, self._REPONSE_2)
 
@@ -51,6 +57,27 @@ class Bet:
     def do_bet(self, bet: ClientBet):
         if not self._BET_LOCKED:
             self._BETS_LIST.append(bet)
+            self.add_to_cote(bet)
+
+
+
+    def add_to_cote(self, bet: ClientBet):
+        if bet.reponse in self._REPONSE_1['name'] or bet.reponse == self._REPONSE_1['emoticon']:
+            self._COTE_R_1['total'] = int(self._COTE_R_1['total']) + int(bet.nb_coins)
+            self._COTE_R_1['count'] = int(self._COTE_R_1['count']) + 1
+
+        elif bet.reponse in self._REPONSE_2['name'] or bet.reponse == self._REPONSE_2['emoticon']:
+            self._COTE_R_2['total'] = int(self._COTE_R_2['total']) + int(bet.nb_coins)
+            self._COTE_R_2['count'] = int(self._COTE_R_2['count']) + 1
+
+        else:
+            pass
+
+
+
+    def get_cote(self):
+        return "votes: " + str(self._COTE_R_1['count']) + "\ncoins: " + str(self._COTE_R_1['total']), "votes: " + str(self._COTE_R_2['count']) + "\ncoins: " + str(self._COTE_R_2['total'])
+
 
 
     def lock(self):
@@ -61,9 +88,23 @@ class Bet:
 
 
     def stop(self):
+        print("[BET STOP] name :", self._BET_UTTERANCE, "| correct reponse :", self._CORRECT_REPONSE)
+        self._INIT_BET_DATETIME = None
+        self._BET_UTTERANCE = None
+        self._NAME_REPONSES = None
+        self._CORRECT_REPONSE = None
+        self._UUID = "0"
+        self._ID = "0"
+        self._OWNER = "None"
         self._BETS_LIST.clear()
         self._BET_LOCKED = False
-        print("[BET STOP] name :", self._BET_UTTERANCE, "| correct reponse :", self._CORRECT_REPONSE)
+        self._BET_IS_ALIVE = False
+        self._COTE_R_1['total'] = 0
+        self._COTE_R_1['count'] = 0
+        self._COTE_R_2['total'] = 0
+        self._COTE_R_2['count'] = 0
+        self._WINNERS.clear()
+        self._LOOSERS.clear()
 
 
     def set_correct_reponse(self, rep: str):
@@ -72,6 +113,27 @@ class Bet:
 
         elif rep in self._REPONSE_2['name'] or rep == self._REPONSE_2['emoticon']:
             self._CORRECT_REPONSE = self._REPONSE_2['emoticon']
+
+
+    def get_winners(self):
+        return self._WINNERS
+
+
+    def get_loosers(self):
+        return self._LOOSERS
+
+
+    def get_correct_reponse(self):
+        return self._CORRECT_REPONSE
+
+
+    def player_names_of_the_bet(self):
+        out = []
+        for client_bet in self._BETS_LIST:
+            bet_client_name = client_bet.name
+            out.append(bet_client_name)
+
+        return out
 
 
     def get_owner(self):
@@ -132,17 +194,25 @@ class Bet:
 
         # on add les coins a tout les winners
         # en fonction de se qui ont voté
-        winners = []
+        payout = []
         for client_bet in self._BETS_LIST:
             bet_client_name = client_bet.name
             bet_client_voted_for = client_bet.reponse
             bet_client_voted_coins = client_bet.nb_coins
 
-            if bet_client_voted_for == self._CORRECT_REPONSE:
-                payout = int(total_all_coins * int(bet_client_voted_coins) / winner_total_coins)
-                winners.append((bet_client_name, payout))
+            client_bet_info = (str(bet_client_name), str(bet_client_voted_for), str(bet_client_voted_coins))
 
-        return winners
+            if bet_client_voted_for in self._CORRECT_REPONSE:
+                # les total des coins sont divisé entre chaque gagnant en fonction de se qu'il on voté
+                _payout = int(total_all_coins * int(bet_client_voted_coins) / winner_total_coins)
+
+                payout.append((bet_client_name, _payout))
+                self._WINNERS.append(client_bet_info)
+
+            else:
+                self._LOOSERS.append(client_bet_info)
+
+        return payout
 
 
 

@@ -12,18 +12,23 @@ class ClientHandler:
 
 
     def get_client_from_name(self, name: str):
+        returned = None
+
         for client in self._CLIENT_LIST:
             if client.name_id in name:
-                return client
+                returned = client
 
-        # find by number atfer the '#'
-        # if special char in user name
-        for client in self._CLIENT_LIST:
-            hash_number_from_input = str(name).split("#")[1]
-            hash_number_from_client = str(client.name_id).split("#")[1]
+        if returned is None:
+            # find by number atfer the '#'
+            # if special char in user name
+            for client in self._CLIENT_LIST:
+                hash_number_from_input = str(name).split("#")[1]
+                hash_number_from_client = str(client.name_id).split("#")[1]
 
-            if int(hash_number_from_input) == int(hash_number_from_client):
-                return client
+                if int(hash_number_from_input) == int(hash_number_from_client):
+                    returned = client
+
+        return returned
 
 
     def get_all_users(self):

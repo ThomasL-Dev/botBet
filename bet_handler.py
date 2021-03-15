@@ -35,8 +35,10 @@ class BetHandler:
                 return bet
 
 
+
     def get_all_bets(self):
         return self._BET_LIST
+
 
 
     def remove_bet(self, uuid: str):
