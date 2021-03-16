@@ -12,7 +12,7 @@ from classement import Classement
 from threading import Thread
 # ========================================== FIN DES IMPORTS ========================================================= #
 
-__version__ = "alpha 0.3"
+__version__ = "alpha 0.3.1"
 
 _COMMANDES_ = {'cmd': [{
                 'start': "start_bet",
@@ -87,8 +87,9 @@ _COMMANDES_ = {'cmd': [{
 class DiscordHandler(discord.Client):
     _DB = DataBase()
 
-    _COIN_TO_ADD = 10
+    _COIN_TO_ADD = 3
     _TIME_BEFORE_ADDING_COIN = 1800  # 30 minutes
+    _CHANNEL_TO_EXCLUDE = 465336735702974464    # salon afk
 
 
     client_handler = None
@@ -131,7 +132,6 @@ class DiscordHandler(discord.Client):
         #        Client(name       , uuid)
         client = Client(str(member), str(member.id))
         self.client_handler.add_user(client)
-
 
 
     async def on_reaction_add(self, reaction, user):
@@ -192,73 +192,86 @@ class DiscordHandler(discord.Client):
 
     async def on_voice_state_update(self, member, before, after):
 
-        if before.channel is None and after.channel is not None:
-            """ Nouvelle connexion à un channel """
-            '''
-                si before channel est None et after channel nest pas None c une nouvelle connexion
-            '''
-            print("[DISCORD INFO]", str(member), "connecter a un channel")
 
-            if before.self_deaf is not True:
+            try:
+                if int(after.channel.id) == int(self._CHANNEL_TO_EXCLUDE):
+                    """ salon afk """
+                    client = self.client_handler.get_client_from_name(str(member))
+
+                    if client is not None:
+                        client.is_deaf_in_vocal = True
+            except AttributeError:
+                # client deco du channel donc plus d'id
+                pass
+
+
+
+            if before.channel is None and after.channel is not None:
+                """ Nouvelle connexion à un channel """
+                '''
+                    si before channel est None et after channel nest pas None c une nouvelle connexion
+                '''
+                print("[DISCORD INFO]", str(member), "connecter a un channel")
+
+                if before.self_deaf is not True:
+
+                    client = self.client_handler.get_client_from_name(str(member))
+
+                    if client is not None:
+                        client.is_connected_in_vocal = True
+                        self.loop.create_task(self.client_service_add_coins(client))
+
+
+
+            if before.self_deaf is True and before.channel is None and after.channel is not None:
+                """ Nouvelle connexion à un channel en etant mute casque """
+                print("[DISCORD INFO]", str(member), "connecté en etant mute a un channel")
 
                 client = self.client_handler.get_client_from_name(str(member))
 
                 if client is not None:
+                    client.is_deaf_in_vocal = True
                     client.is_connected_in_vocal = True
                     self.loop.create_task(self.client_service_add_coins(client))
 
 
 
-        elif before.self_deaf is True and before.channel is None and after.channel is not None:
-            """ Nouvelle connexion à un channel en etant mute casque """
-            print("[DISCORD INFO]", str(member), "connecté en etant mute a un channel")
+            if before.self_deaf is False and after.self_deaf is True:
+                """ client cest mute casque """
+                print("[DISCORD INFO]", str(member), "mute dun channel")
 
-            client = self.client_handler.get_client_from_name(str(member))
+                client = self.client_handler.get_client_from_name(str(member))
 
-            if client is not None:
-                client.is_deaf_in_vocal = True
-                client.is_connected_in_vocal = True
-                self.loop.create_task(self.client_service_add_coins(client))
+                if client is not None:
+                    client.is_deaf_in_vocal = True
 
 
 
-        if before.self_deaf is False and after.self_deaf is True:
-            """ client cest mute casque """
-            print("[DISCORD INFO]", str(member), "mute dun channel")
+            if before.self_deaf is True and after.self_deaf is False:
+                """ client cest demute casque """
+                print("[DISCORD INFO]", str(member), "demute dun channel")
 
-            client = self.client_handler.get_client_from_name(str(member))
+                client = self.client_handler.get_client_from_name(str(member))
 
-            if client is not None:
-                client.is_deaf_in_vocal = True
-
-
-
-        if before.self_deaf is True and after.self_deaf is False:
-            """ client cest demute casque """
-            print("[DISCORD INFO]", str(member), "demute dun channel")
-
-            client = self.client_handler.get_client_from_name(str(member))
-
-            if client is not None:
-                client.is_deaf_in_vocal = False
+                if client is not None:
+                    client.is_deaf_in_vocal = False
 
 
 
-        if before.channel is not None and after.channel is None:
-            """ deconnexion d'un channel """
-            '''
-                si before channel nest pas None et after channel est None c une deconnexion de channel
+            if before.channel is not None and after.channel is None:
+                """ deconnexion d'un channel """
+                '''
+                    si before channel nest pas None et after channel est None c une deconnexion de channel
+        
+                    On arrete dadd les coin
+                '''
+                print("[DISCORD INFO]", str(member), "deconnecter dun channel")
 
-                On arrete dadd les coin
-            '''
-            print("[DISCORD INFO]", str(member), "deconnecter dun channel")
+                client = self.client_handler.get_client_from_name(str(member))
 
-            client = self.client_handler.get_client_from_name(str(member))
-
-            if client is not None:
-                client.is_connected_in_vocal = False
-                client.is_deaf_in_vocal = False
-
+                if client is not None:
+                    client.is_connected_in_vocal = False
+                    client.is_deaf_in_vocal = False
 
 
     async def on_message(self, message):
@@ -651,6 +664,19 @@ class DiscordHandler(discord.Client):
                     output += "\n"
                     output += "\tPersonne n'a voté"
 
+                elif len(winners) == 0 and len(loosers) != 0:
+                    output += "\n"
+                    output += "\tAucun gagnants les dogs 🥵\n\n"
+
+                    for client_bet in bet.get_bet_list():  # on redonne les coins a ce qui les ont bets
+                        client_name = client_bet.name
+                        client_payback = client_bet.nb_coins
+
+                        client = self.client_handler.get_client_from_name(client_name)
+                        client.add_coin(client_payback)
+                        output += "\t" + str(client_name) + " a récupéré ces " + str(client_payback) + " coins\n"
+
+
                 else:
 
                     if len(winners) != 0:
@@ -663,6 +689,7 @@ class DiscordHandler(discord.Client):
                             client = self.client_handler.get_client_from_name(str(client_win))
                             client.add_coin(int(payout))
                             output += "\t" + str(client_win) + " à voté '" + str(bet.get_correct_reponse()) + "' et a gagné " + str(payout) + " coins\n"
+
 
 
                     if len(loosers) != 0:
