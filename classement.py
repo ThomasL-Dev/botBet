@@ -28,20 +28,20 @@ class Classement:
             c_name = c[0]
             c_coins = c[1]
 
-            if c_coins == 1000:
-                """ si une personne est a 1000 cest quil a jamais bet"""
+            if c_coins == 300:
+                """ si une personne est a 300 cest quil a jamais bet"""
                 pass
             else:
                 self._classement_by_desc.append(str(classment_int) + "# " + str(c_name) + " avec " + str(c_coins) + " coins")
                 if not self.first:
-                    self.first = c_name
+                    self.first = str(c_name) + " avec " + str(c_coins) + " coins"
                 elif not self.second:
-                    self.second = c_name
+                    self.second = str(c_name) + " avec " + str(c_coins) + " coins"
                 elif not self.third:
-                    self.third = c_name
+                    self.third = str(c_name) + " avec " + str(c_coins) + " coins"
                 else:
                     pass
                 classment_int += 1
 
-        self.last = c_name
+                self.last = str(classment_int) + "# " + str(c_name) + " avec " + str(c_coins) + " coins"
 

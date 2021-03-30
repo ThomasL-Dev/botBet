@@ -4,6 +4,8 @@ from client import Client
 
 
 class ClientHandler:
+
+
     _CLIENT_LIST = []
 
 

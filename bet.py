@@ -108,10 +108,10 @@ class Bet:
 
 
     def set_correct_reponse(self, rep: str):
-        if rep in self._REPONSE_1['name'] or rep == self._REPONSE_1['emoticon']:
+        if rep.lower() in self._REPONSE_1['name'].lower() or rep == self._REPONSE_1['emoticon']:
             self._CORRECT_REPONSE = self._REPONSE_1['emoticon']
 
-        elif rep in self._REPONSE_2['name'] or rep == self._REPONSE_2['emoticon']:
+        elif rep.lower() in self._REPONSE_2['name'].lower() or rep == self._REPONSE_2['emoticon']:
             self._CORRECT_REPONSE = self._REPONSE_2['emoticon']
 
 

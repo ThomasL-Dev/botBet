@@ -16,7 +16,6 @@ class DataBase:
             db.execute("""
                             CREATE TABLE IF NOT EXISTS client(
                                  name TEXT PRIMARY KEY UNIQUE,
-                                 uuid TEXT,
                                  coin INT
                             )
                             """)
@@ -104,8 +103,6 @@ class DataBase:
             pass
 
 
-
-
     def get_coins_from_name(self, name: str):
         try:
             db = sqlite3.connect(self.DB_CLIENT)
@@ -168,6 +165,4 @@ class DataBase:
         cursor.close()
         db.close()
         return returned
-
-
 

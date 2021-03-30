@@ -14,6 +14,8 @@ from threading import Thread
 
 __version__ = "alpha 0.3.1"
 
+__saison__ = "saison 2"
+
 _COMMANDES_ = {'cmd': [{
                 'start': "start_bet",
                 'description': "demarre le bet  | (ex: !start_bet <phrase>, <reponse1>/<reponse2>)"
@@ -188,6 +190,10 @@ class DiscordHandler(discord.Client):
                         output_msg = "``` le bet ne peut plus recevoir de parri ```"
                         await user.send(output_msg)
 
+                else:
+                    """ ce nest pas un bet """
+                    pass
+
 
 
     async def on_voice_state_update(self, member, before, after):
@@ -196,10 +202,12 @@ class DiscordHandler(discord.Client):
             try:
                 if int(after.channel.id) == int(self._CHANNEL_TO_EXCLUDE):
                     """ salon afk """
-                    client = self.client_handler.get_client_from_name(str(member))
+                    print("[DISCORD INFO]", str(member), "connecter au channel AFK")
 
-                    if client is not None:
-                        client.is_deaf_in_vocal = True
+                    # client = self.client_handler.get_client_from_name(str(member))
+
+                    # if client is not None:
+                    #     client.is_deaf_in_vocal = True
             except AttributeError:
                 # client deco du channel donc plus d'id
                 pass
@@ -213,13 +221,13 @@ class DiscordHandler(discord.Client):
                 '''
                 print("[DISCORD INFO]", str(member), "connecter a un channel")
 
-                if before.self_deaf is not True:
+                # if before.self_deaf is not True:
 
-                    client = self.client_handler.get_client_from_name(str(member))
+                #     client = self.client_handler.get_client_from_name(str(member))
 
-                    if client is not None:
-                        client.is_connected_in_vocal = True
-                        self.loop.create_task(self.client_service_add_coins(client))
+                #     if client is not None:
+                #         client.is_connected_in_vocal = True
+                #         self.loop.create_task(self.client_service_add_coins(client))
 
 
 
@@ -227,12 +235,12 @@ class DiscordHandler(discord.Client):
                 """ Nouvelle connexion à un channel en etant mute casque """
                 print("[DISCORD INFO]", str(member), "connecté en etant mute a un channel")
 
-                client = self.client_handler.get_client_from_name(str(member))
+                # client = self.client_handler.get_client_from_name(str(member))
 
-                if client is not None:
-                    client.is_deaf_in_vocal = True
-                    client.is_connected_in_vocal = True
-                    self.loop.create_task(self.client_service_add_coins(client))
+                # if client is not None:
+                #     client.is_deaf_in_vocal = True
+                #     client.is_connected_in_vocal = True
+                #     self.loop.create_task(self.client_service_add_coins(client))
 
 
 
@@ -240,10 +248,10 @@ class DiscordHandler(discord.Client):
                 """ client cest mute casque """
                 print("[DISCORD INFO]", str(member), "mute dun channel")
 
-                client = self.client_handler.get_client_from_name(str(member))
+                # client = self.client_handler.get_client_from_name(str(member))
 
-                if client is not None:
-                    client.is_deaf_in_vocal = True
+                # if client is not None:
+                #     client.is_deaf_in_vocal = True
 
 
 
@@ -251,10 +259,10 @@ class DiscordHandler(discord.Client):
                 """ client cest demute casque """
                 print("[DISCORD INFO]", str(member), "demute dun channel")
 
-                client = self.client_handler.get_client_from_name(str(member))
+                # client = self.client_handler.get_client_from_name(str(member))
 
-                if client is not None:
-                    client.is_deaf_in_vocal = False
+                # if client is not None:
+                #     client.is_deaf_in_vocal = False
 
 
 
@@ -267,11 +275,11 @@ class DiscordHandler(discord.Client):
                 '''
                 print("[DISCORD INFO]", str(member), "deconnecter dun channel")
 
-                client = self.client_handler.get_client_from_name(str(member))
+                # client = self.client_handler.get_client_from_name(str(member))
 
-                if client is not None:
-                    client.is_connected_in_vocal = False
-                    client.is_deaf_in_vocal = False
+                # if client is not None:
+                #     client.is_connected_in_vocal = False
+                #     client.is_deaf_in_vocal = False
 
 
     async def on_message(self, message):
@@ -283,6 +291,9 @@ class DiscordHandler(discord.Client):
 
         else:
             user_input = str(message.content)
+
+            if "  " in user_input:
+                user_input = user_input.replace("  ", " ")
 
 
             if user_input.startswith("!"):
@@ -478,22 +489,23 @@ class DiscordHandler(discord.Client):
 
 
     async def client_service_add_coins(self, client):
-        while True:
+        pass
+        # while True:
 
-            if client.is_deaf_in_vocal:
-                print("[SERVICE ADDING COINS]", "waiting for", client.name_id, "to demute headset")
-                await asyncio.sleep(2)
-                pass
+        #     if client.is_deaf_in_vocal:
+        #         print("[SERVICE ADDING COINS]", "waiting for", client.name_id, "to demute headset")
+        #         await asyncio.sleep(2)
+        #         pass
 
-            elif client.is_connected_in_vocal:
-                # do something
-                await asyncio.sleep(self._TIME_BEFORE_ADDING_COIN)
-                print("[SERVICE ADDING COINS]", "adding", self._COIN_TO_ADD, "coins to", client.name_id)
-                client.add_coin(self._COIN_TO_ADD)
+        #     elif client.is_connected_in_vocal:
+        #         # do something
+        #         await asyncio.sleep(self._TIME_BEFORE_ADDING_COIN)
+        #         print("[SERVICE ADDING COINS]", "adding", self._COIN_TO_ADD, "coins to", client.name_id)
+        #         client.add_coin(self._COIN_TO_ADD)
 
-            else:
-                print("[SERVICE ADDING COINS]", "stop service for", client.name_id, "- (cause : déconnexion)")
-                break
+        #     else:
+        #         print("[SERVICE ADDING COINS]", "stop service for", client.name_id, "- (cause : déconnexion)")
+        #         break
 
 
 
@@ -800,10 +812,11 @@ class DiscordHandler(discord.Client):
                 client = self.client_handler.get_client_from_name(client_name)
                 client.add_coin(client_payback)
 
+            output = "```" + str(owner) + " cancel du bet '" + str(bet.get_utterance()) + "'```"
+
             bet.stop()
             self.bet_handler.remove_bet(str(bet.get_uuid()))
 
-            output = "```" + str(owner) + " cancel du bet '" + str(bet.get_utterance()) + "'```"
             await channel.send(output)
 
 
@@ -839,7 +852,7 @@ class DiscordHandler(discord.Client):
                 # uuid = str(bet.get_uuid())
 
                 output += "\tBet#" + str(id) + " : " + str(ut) + "\n"
-                output += "\t\towner : " + owner + "\n"
+                output += "\t\towner : " + str(owner) + "\n"
                 output += "\t\treponses : " + str(rep_1['name']) + ", " + str(rep_2['name']) + "\n"
                 output += "\t\tdate : " + str(date) + "\n"
                 # output += "\t\tuuid : " + uuid + "\n"
@@ -858,8 +871,8 @@ class DiscordHandler(discord.Client):
         for cmd in _COMMANDES_['cmd']:
             name = str(cmd).split("': '")[0].replace("{'", "")
 
-            help_output += "\tcmd :  " + cmd[name] + "\n"
-            help_output += "\tdesc :  " + cmd['description'] + "\n\n"
+            help_output += "\tcmd :  " + str(cmd[name]) + "\n"
+            help_output += "\tdesc :  " + str(cmd['description']) + "\n\n"
 
         help_output += "```"
 
@@ -892,15 +905,23 @@ class DiscordHandler(discord.Client):
         c = 1
 
         output_msg = "```"
-        output_msg += "le premier " + _classement.first + "\n"
-        output_msg += "le dernier " + _classement.last + "\n\n\n"
-
         output_msg += "[CLASSEMENT]" + "\n\n"
 
-        for classed in classement:
-            if c <= 20:
-                output_msg += classed + "\n"
-            c += 1
+        if classement:  # si ya du monde dans la db
+
+            for classed in classement:
+                if c <= 20:
+                    if str(classed).startswith("1#"):
+                        output_msg += "🧞 " + str(classed) + "\n"
+                    else:
+                        output_msg += classed + "\n"
+
+                c += 1
+
+            output_msg += "\n💩 " + str(_classement.last) + "\n\n\n"
+
+        else:
+            output_msg += "okamari no suzoki saskue-chan"
 
         output_msg += "```"
         await channel.send(output_msg)

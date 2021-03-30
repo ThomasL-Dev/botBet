@@ -16,7 +16,7 @@ class Client:
         self.uuid = uuid
 
         # on ajoute le client a la db pour lenregistrer si il nest pas deja dedans et on ajoute les coins de depart
-        self.db.insert(self.name_id, 1000)
+        self.db.insert(self.name_id, 300)
 
         self.coins = self.get_total_coins()
 
